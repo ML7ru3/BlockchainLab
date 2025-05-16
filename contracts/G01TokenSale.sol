@@ -1,52 +1,54 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "./Group3Token.sol";
 
-contract G01TokenSale is ReentrancyGuard {
-    IERC20 public token;
-    address payable public wallet;
-    uint256 public maxTokens;
-    uint256 public firstTierLimit;
+contract TokenSale {
+    GroupXToken public token;
+    address payable public owner;
+    uint256 public saleStart;
     uint256 public tokensSold;
-    uint256 public startTime;
-    uint256 public endTime;
-    uint256 public constant FIRST_TIER_PRICE = 5 ether;
-    uint256 public constant SECOND_TIER_PRICE = 10 ether;
-
-    event TokensPurchased(address indexed buyer, uint256 amount, uint256 ethSpent);
-
-    constructor(address _token, address payable _wallet, uint256 _maxTokens) {
-        token = IERC20(_token);
-        wallet = _wallet;
-        maxTokens = _maxTokens;
-        firstTierLimit = _maxTokens / 2; // 25% của tổng cung
-        tokensSold = 0;
-        startTime = block.timestamp;
-        endTime = startTime + 30 days;
+    uint256 public constant TOTAL_SUPPLY = 1000 * 10 ** 18;
+    uint256 public constant MAX_SALE = TOTAL_SUPPLY / 2; // 50%
+    uint256 public constant FIRST_TIER_LIMIT = TOTAL_SUPPLY / 4; // 25%
+    
+    constructor(address tokenAddress) {
+        token = GroupXToken(tokenAddress);
+        owner = payable(msg.sender);
+        saleStart = block.timestamp;
     }
 
-    function buyTokens(uint256 amount) external payable nonReentrant {
-        require(block.timestamp <= endTime, "Sale ended");
-        require(tokensSold + amount <= maxTokens, "Not enough tokens left");
+    function buyTokens(uint256 tokenAmount) public payable {
+        require(block.timestamp <= saleStart + 30 days, "Sale ended");
+        require(tokensSold + tokenAmount <= MAX_SALE, "Exceeds sale cap");
 
-        uint256 price = tokensSold < firstTierLimit ? FIRST_TIER_PRICE : SECOND_TIER_PRICE;
-        uint256 cost = amount * price;
-        require(msg.value >= cost, "Insufficient ETH");
-
-        tokensSold += amount;
-        token.transfer(msg.sender, amount);
-        wallet.transfer(cost);
-
-        if (msg.value > cost) {
-            payable(msg.sender).transfer(msg.value - cost); // Hoàn tiền thừa
+        uint256 cost;
+        if (tokensSold < FIRST_TIER_LIMIT) {
+            uint256 firstTierLeft = FIRST_TIER_LIMIT - tokensSold;
+            if (tokenAmount <= firstTierLeft) {
+                cost = (tokenAmount / 1 ether) * 5 ether;
+            } else {
+                cost = ((firstTierLeft / 1 ether) * 5 ether) + (((tokenAmount - firstTierLeft) / 1 ether) * 10 ether);
+            }
+        } else {
+            cost = (tokenAmount / 1 ether) * 10 ether;
         }
 
-        emit TokensPurchased(msg.sender, amount, cost);
+        require(msg.value == cost, "Incorrect ETH amount");
+
+        tokensSold += tokenAmount;
+        token.transfer(msg.sender, tokenAmount);
+        owner.transfer(msg.value);
     }
 
-    function isSaleActive() external view returns (bool) {
-        return block.timestamp <= endTime && tokensSold < maxTokens;
+    function endSale() public {
+        require(msg.sender == owner, "Only owner can end");
+        require(block.timestamp > saleStart + 30 days, "Sale not ended");
+
+        uint256 remaining = token.balanceOf(address(this));
+        if (remaining > 0) {
+            token.transfer(owner, remaining);
+        }
     }
 }
+

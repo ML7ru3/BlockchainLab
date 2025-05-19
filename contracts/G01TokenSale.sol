@@ -21,7 +21,6 @@ contract TokenSale {
     function buyTokens(uint256 tokenAmount) public payable {
         require(block.timestamp <= saleStart + 30 days, "Sale ended");
         require(tokensSold + tokenAmount <= MAX_SALE, "Exceeds sale cap");
-
         uint256 cost;
         if (tokensSold < FIRST_TIER_LIMIT) {
             uint256 firstTierLeft = FIRST_TIER_LIMIT - tokensSold;
@@ -33,9 +32,7 @@ contract TokenSale {
         } else {
             cost = (tokenAmount / 1 ether) * 10 ether;
         }
-
         require(msg.value == cost, "Incorrect ETH amount");
-
         tokensSold += tokenAmount;
         token.transfer(msg.sender, tokenAmount);
         owner.transfer(msg.value);
@@ -44,7 +41,6 @@ contract TokenSale {
     function endSale() public {
         require(msg.sender == owner, "Only owner can end");
         require(block.timestamp > saleStart + 30 days, "Sale not ended");
-
         uint256 remaining = token.balanceOf(address(this));
         if (remaining > 0) {
             token.transfer(owner, remaining);
